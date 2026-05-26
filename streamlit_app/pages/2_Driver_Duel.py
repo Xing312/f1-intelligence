@@ -128,14 +128,9 @@ except Exception as e:
 
 st.divider()
 
-# ── Telemetry (on demand) ──────────────────────────────────────────────────────
+# ── Telemetry & Track Delta ────────────────────────────────────────────────────
 st.subheader("Telemetry & Track Delta")
-st.caption("Fastest lap telemetry for each driver — speed, throttle, brake overlay.")
-
-if st.button("Load Telemetry"):
-    st.session_state["load_duel_telemetry"] = True
-
-if st.session_state.get("load_duel_telemetry"):
+if True:
     try:
         import src.analysis.track_map as _tm
         importlib.reload(_tm)

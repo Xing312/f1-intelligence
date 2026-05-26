@@ -170,24 +170,19 @@ st.divider()
 
 # ── Circuit Map (telemetry — on demand) ───────────────────────────────────────
 st.subheader("Circuit Map")
-st.caption("Colored by telemetry channel — fastest lap of the race.")
-
-if st.button("Load Circuit Map"):
-    st.session_state["load_overview_map"] = True
-
-if st.session_state.get("load_overview_map"):
-    try:
-        import src.analysis.track_map as _tm
-        importlib.reload(_tm)
-        tel = _load_fastest_telemetry(year, round_num)
-        if tel.empty:
-            st.info("No telemetry data stored for this race.")
-        else:
-            channel = st.radio(
-                "Color channel", ["Speed", "Throttle", "nGear", "Brake"],
-                horizontal=True, key="overview_channel",
-            )
-            fig_map = _tm.build_track_figure(tel, channel)
-            st.plotly_chart(fig_map, use_container_width=True)
-    except Exception as e:
-        st.warning(f"Circuit map unavailable: {e}")
+try:
+    import src.analysis.track_map as _tm
+    importlib.reload(_tm)
+    tel = _load_fastest_telemetry(year, round_num)
+    if tel.empty:
+        st.info("No telemetry data stored for this race.")
+    else:
+        channel = st.radio(
+            "Color channel", ["Speed", "Throttle", "nGear", "Brake"],
+            horizontal=True, key="overview_channel",
+        )
+        fig_map = _tm.build_track_figure(tel, channel)
+        st.plotly_chart(fig_map, use_container_width=True)
+        st.caption("Fastest lap of the race · colored by selected channel")
+except Exception as e:
+    st.warning(f"Circuit map unavailable: {e}")
