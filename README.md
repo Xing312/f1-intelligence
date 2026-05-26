@@ -1,5 +1,7 @@
 # F1 Race Intelligence Hub
 
+**Live demo: https://f1-intelligence-da3qbujmtpszcne7xfrqfh.streamlit.app**
+
 An interactive F1 race analytics platform built with real telemetry data. Select any race, dive into lap-level performance, tire strategy, and anomaly detection — or ask the AI race engineer directly.
 
 ## Features

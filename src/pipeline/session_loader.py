@@ -5,8 +5,10 @@ import fastf1
 import pandas as pd
 from pathlib import Path
 
-CACHE_DIR = Path("cache")
-CACHE_DIR.mkdir(exist_ok=True)
+# Use /tmp on cloud, local cache/ otherwise
+_cache_candidates = [Path("/tmp/fastf1_cache"), Path("cache")]
+CACHE_DIR = next((p for p in _cache_candidates if os.access(str(p.parent), os.W_OK)), Path("/tmp/fastf1_cache"))
+CACHE_DIR.mkdir(parents=True, exist_ok=True)
 fastf1.Cache.enable_cache(str(CACHE_DIR))
 
 # Compound color map for consistent styling
@@ -23,7 +25,13 @@ COMPOUND_COLORS = {
 def load_session(year: int, round_num: int, session_type: str = "R") -> fastf1.core.Session:
     """Load and cache a FastF1 session. session_type: R=Race, Q=Qualifying."""
     session = fastf1.get_session(year, round_num, session_type)
-    session.load(telemetry=True, weather=True, messages=True)
+    session.load(
+        laps=True,
+        telemetry=True,
+        weather=True,
+        messages=True,
+        livedata=None,
+    )
     return session
 
 
