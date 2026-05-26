@@ -29,14 +29,14 @@ def available_years() -> list[int]:
 
 def get_schedule(year: int) -> pd.DataFrame:
     return _q(
-        "SELECT DISTINCT Round, EventName, Circuit, Country FROM race_results WHERE Year=? ORDER BY Round",
+        "SELECT DISTINCT Round, EventName, Circuit, Country FROM race_results WHERE Year=? ORDER BY Round ASC",
         [year]
     )
 
 
 def get_results(year: int, round_num: int) -> pd.DataFrame:
     return _q(
-        "SELECT * FROM race_results WHERE Year=? AND Round=? ORDER BY CAST(Position AS FLOAT)",
+        "SELECT DISTINCT * FROM race_results WHERE Year=? AND Round=? ORDER BY CAST(Position AS FLOAT)",
         [year, round_num]
     )
 

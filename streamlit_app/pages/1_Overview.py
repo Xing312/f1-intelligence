@@ -34,7 +34,7 @@ try:
             3: "background-color:#CD7F32;color:#000",
         }
         def row_style(row):
-            return [medal.get(row["_pos"], "")] * len(row)
+            return [medal.get(row["Position"], "")] * len(row)
         return df.style.apply(row_style, axis=1)
 
     display_cols = ["_pos", "Abbreviation", "FullName", "TeamName", "GridPosition", "Gained", "Points", "Status"]
