@@ -88,17 +88,27 @@ def fetch_season(year: int, db_path: Path = DB_PATH):
     con = duckdb.connect(str(db_path))
 
     for _, event in schedule.iterrows():
-        round_num = event["RoundNumber"]
+        round_num = int(event["RoundNumber"])
+        # Skip if already stored
+        existing = con.execute(
+            "SELECT COUNT(*) FROM race_results WHERE Year=? AND Round=?",
+            [year, round_num]
+        ).fetchone()[0] if "race_results" in con.execute("SHOW TABLES").df()["name"].tolist() else 0
+        if existing > 0:
+            print(f"[{year}] Round {round_num}: already stored, skipping")
+            continue
         print(f"[{year}] Round {round_num}: {event['EventName']}")
         try:
-            session = get_session(year, int(round_num), "R")
+            session = get_session(year, round_num, "R")
             _upsert(con, extract_race_results(session), "race_results")
             _upsert(con, extract_lap_data(session), "lap_data")
             _upsert(con, extract_weather(session), "weather_data")
             _upsert(con, extract_race_control(session), "race_control")
             print(f"  ✓ saved")
+            import time; time.sleep(8)  # stay under 500 calls/h rate limit
         except Exception as e:
             print(f"  Skipped — {e}")
+            import time; time.sleep(30)  # longer wait after an error
 
     con.close()
     print(f"Done: {year}")
