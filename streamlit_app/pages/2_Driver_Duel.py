@@ -15,6 +15,13 @@ from src.analysis.lap_analysis import (
     get_consistency_score, auto_summary,
 )
 
+
+@st.cache_resource(show_spinner="Loading telemetry from F1 API…")
+def _load_telemetry(yr: int, rnd: int):
+    import src.pipeline.session_loader as _sl
+    importlib.reload(_sl)
+    return _sl.load_session(yr, rnd, "R")
+
 st.set_page_config(page_title="Driver Duel", page_icon="⚔️", layout="wide")
 st.title("⚔️ Driver Duel")
 
@@ -124,56 +131,51 @@ st.divider()
 
 # ── Telemetry (on demand) ──────────────────────────────────────────────────────
 st.subheader("Telemetry & Track Delta")
-st.caption("Telemetry requires downloading data from the F1 API (~30s).")
+st.caption("Telemetry downloads from the F1 API on first load (~30s).")
 
 if st.button("Load Telemetry"):
     st.session_state["load_duel_telemetry"] = True
 
 if st.session_state.get("load_duel_telemetry"):
-    with st.spinner("Loading telemetry…"):
-        try:
-            from src.pipeline.session_loader import load_session, get_fastest_lap
-            from src.analysis.track_map import build_track_figure, build_delta_map
-            from plotly.subplots import make_subplots
+    try:
+        import src.analysis.track_map as _tm
+        importlib.reload(_tm)
+        from plotly.subplots import make_subplots
 
-            @st.cache_resource(show_spinner=False)
-            def _load(yr, rnd):
-                return load_session(yr, rnd, "R")
+        session = _load_telemetry(year, round_num)
+        fl_a = session.laps.pick_driver(driver_a).pick_fastest()
+        fl_b = session.laps.pick_driver(driver_b).pick_fastest()
 
-            session = _load(year, round_num)
-            fl_a = get_fastest_lap(session, driver_a)
-            fl_b = get_fastest_lap(session, driver_b)
+        tel_a = fl_a.get_telemetry().add_distance()
+        tel_b = fl_b.get_telemetry().add_distance()
 
-            tel_a = fl_a.get_telemetry().add_distance()
-            tel_b = fl_b.get_telemetry().add_distance()
+        channels = ["Speed", "Throttle", "Brake"]
+        fig_tel = make_subplots(rows=3, cols=1, shared_xaxes=True,
+                                subplot_titles=channels, vertical_spacing=0.06)
+        for i, ch in enumerate(channels, 1):
+            if ch in tel_a.columns:
+                fig_tel.add_trace(go.Scatter(
+                    x=tel_a["Distance"], y=tel_a[ch],
+                    name=driver_a, line=dict(color="#E8002D"),
+                    showlegend=(i == 1),
+                ), row=i, col=1)
+            if ch in tel_b.columns:
+                fig_tel.add_trace(go.Scatter(
+                    x=tel_b["Distance"], y=tel_b[ch],
+                    name=driver_b, line=dict(color="#4FC3F7"),
+                    showlegend=(i == 1),
+                ), row=i, col=1)
 
-            channels = ["Speed", "Throttle", "Brake"]
-            fig_tel = make_subplots(rows=3, cols=1, shared_xaxes=True,
-                                    subplot_titles=channels, vertical_spacing=0.06)
-            for i, ch in enumerate(channels, 1):
-                if ch in tel_a.columns:
-                    fig_tel.add_trace(go.Scatter(
-                        x=tel_a["Distance"], y=tel_a[ch],
-                        name=driver_a, line=dict(color="#E8002D"),
-                        showlegend=(i == 1),
-                    ), row=i, col=1)
-                if ch in tel_b.columns:
-                    fig_tel.add_trace(go.Scatter(
-                        x=tel_b["Distance"], y=tel_b[ch],
-                        name=driver_b, line=dict(color="#4FC3F7"),
-                        showlegend=(i == 1),
-                    ), row=i, col=1)
+        fig_tel.update_layout(
+            paper_bgcolor="#0F0F0F", plot_bgcolor="#0F0F0F", font_color="#FFF",
+            height=500, margin=dict(t=30), legend=dict(orientation="h"),
+        )
+        fig_tel.update_xaxes(title_text="Distance (m)", row=3, col=1)
+        st.plotly_chart(fig_tel, use_container_width=True)
 
-            fig_tel.update_layout(
-                paper_bgcolor="#0F0F0F", plot_bgcolor="#0F0F0F", font_color="#FFF",
-                height=500, margin=dict(t=30), legend=dict(orientation="h"),
-            )
-            fig_tel.update_xaxes(title_text="Distance (m)", row=3, col=1)
-            st.plotly_chart(fig_tel, use_container_width=True)
+        st.subheader("Track Delta Map")
+        fig_delta = _tm.build_delta_map(fl_a, fl_b, driver_a, driver_b)
+        st.plotly_chart(fig_delta, use_container_width=True)
 
-            st.subheader("Track Delta Map")
-            fig_delta = build_delta_map(fl_a, fl_b, driver_a, driver_b)
-            st.plotly_chart(fig_delta, use_container_width=True)
-
-        except Exception as e:
-            st.warning(f"Telemetry unavailable: {e}")
+    except Exception as e:
+        st.warning(f"Telemetry unavailable: {e}")

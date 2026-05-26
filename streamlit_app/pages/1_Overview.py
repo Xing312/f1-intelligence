@@ -1,4 +1,5 @@
 import sys
+import importlib
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parents[2]))
 
@@ -6,6 +7,13 @@ import streamlit as st
 import plotly.graph_objects as go
 import pandas as pd
 from src.pipeline.db import get_results, get_weather, get_race_control, fastest_lap
+
+
+@st.cache_resource(show_spinner="Loading telemetry from F1 API…")
+def _load_telemetry(yr: int, rnd: int):
+    import src.pipeline.session_loader as _sl
+    importlib.reload(_sl)
+    return _sl.load_session(yr, rnd, "R")
 
 st.set_page_config(page_title="Overview", page_icon="🏁", layout="wide")
 st.title("🏁 Race Overview")
@@ -163,30 +171,24 @@ st.divider()
 
 # ── Circuit Map (telemetry — on demand) ───────────────────────────────────────
 st.subheader("Circuit Map")
-st.caption("Track maps require downloading telemetry data from the F1 API (~30s).")
+st.caption("Track maps download telemetry from the F1 API on first load (~30s).")
 
 if st.button("Load Circuit Map"):
     st.session_state["load_overview_map"] = True
 
 if st.session_state.get("load_overview_map"):
-    with st.spinner("Loading telemetry…"):
-        try:
-            from src.pipeline.session_loader import load_session, get_fastest_lap as _fl
-            from src.analysis.track_map import build_track_figure
+    try:
+        import src.analysis.track_map as _tm
+        importlib.reload(_tm)
 
-            @st.cache_resource(show_spinner=False)
-            def _load_session(yr, rnd):
-                return load_session(yr, rnd, "R")
+        session = _load_telemetry(year, round_num)
+        fl = session.laps.pick_fastest()
 
-            session = _load_session(year, round_num)
-            fl_driver = session.laps.pick_fastest()["Driver"]
-            fl = _fl(session, fl_driver)
-
-            channel = st.radio(
-                "Color channel", ["Speed", "Throttle", "nGear", "Brake"],
-                horizontal=True, key="overview_channel",
-            )
-            fig_map = build_track_figure(fl, channel)
-            st.plotly_chart(fig_map, use_container_width=True)
-        except Exception as e:
-            st.warning(f"Circuit map unavailable: {e}")
+        channel = st.radio(
+            "Color channel", ["Speed", "Throttle", "nGear", "Brake"],
+            horizontal=True, key="overview_channel",
+        )
+        fig_map = _tm.build_track_figure(fl, channel)
+        st.plotly_chart(fig_map, use_container_width=True)
+    except Exception as e:
+        st.warning(f"Circuit map unavailable: {e}")
