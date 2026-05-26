@@ -75,6 +75,21 @@ def get_sc_laps(year: int, round_num: int) -> set[int]:
     return set(sc["Lap"].astype(int).tolist())
 
 
+def get_telemetry(year: int, round_num: int, driver: str = None) -> pd.DataFrame:
+    if driver:
+        return _q(
+            "SELECT * FROM telemetry WHERE Year=? AND Round=? AND Driver=? ORDER BY SampleIdx",
+            [year, round_num, driver],
+        )
+    fl = fastest_lap(year, round_num)
+    if fl is None:
+        return pd.DataFrame()
+    return _q(
+        "SELECT * FROM telemetry WHERE Year=? AND Round=? AND Driver=? ORDER BY SampleIdx",
+        [year, round_num, fl["Driver"]],
+    )
+
+
 def get_drivers(year: int, round_num: int) -> list[str]:
     df = _q(
         "SELECT DISTINCT Driver FROM lap_data WHERE Year=? AND Round=? ORDER BY Driver",

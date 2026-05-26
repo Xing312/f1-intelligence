@@ -16,16 +16,10 @@ from src.analysis.lap_analysis import (
 )
 
 
-@st.cache_data(show_spinner="Loading telemetry from F1 API…")
+@st.cache_data(show_spinner=False)
 def _load_driver_telemetry(yr: int, rnd: int, drv_a: str, drv_b: str):
-    import src.pipeline.session_loader as _sl
-    import src.analysis.track_map as _tm
-    importlib.reload(_sl)
-    importlib.reload(_tm)
-    session = _sl.load_session(yr, rnd, "R")
-    fl_a = session.laps.pick_driver(drv_a).pick_fastest()
-    fl_b = session.laps.pick_driver(drv_b).pick_fastest()
-    return _tm.lap_to_telemetry(fl_a), _tm.lap_to_telemetry(fl_b)
+    from src.pipeline.db import get_telemetry
+    return get_telemetry(yr, rnd, drv_a), get_telemetry(yr, rnd, drv_b)
 
 st.set_page_config(page_title="Driver Duel", page_icon="⚔️", layout="wide")
 st.title("⚔️ Driver Duel")
@@ -136,7 +130,7 @@ st.divider()
 
 # ── Telemetry (on demand) ──────────────────────────────────────────────────────
 st.subheader("Telemetry & Track Delta")
-st.caption("Telemetry downloads from the F1 API on first load (~30s).")
+st.caption("Fastest lap telemetry for each driver — speed, throttle, brake overlay.")
 
 if st.button("Load Telemetry"):
     st.session_state["load_duel_telemetry"] = True
