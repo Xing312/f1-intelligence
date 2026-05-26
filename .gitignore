@@ -1,0 +1,14 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+.env
+.venv/
+venv/
+data/raw/
+data/processed/
+cache/
+.fastf1_cache/
+.ipynb_checkpoints/
+.DS_Store
+.env
+.streamlit/secrets.toml
