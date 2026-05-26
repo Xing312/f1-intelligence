@@ -3,6 +3,7 @@
 import os
 import fastf1
 import pandas as pd
+import duckdb
 from pathlib import Path
 
 # Use /tmp on cloud, local cache/ otherwise
@@ -48,12 +49,34 @@ def get_drivers(session) -> list[dict]:
     return drivers
 
 
+def _db_path() -> Path:
+    candidates = [Path("f1.duckdb"), Path(__file__).parents[2] / "f1.duckdb"]
+    for p in candidates:
+        if p.exists():
+            return p
+    return Path("f1.duckdb")
+
+
 def get_race_control(session) -> pd.DataFrame:
-    """Race control messages: Safety Car, VSC, yellow flags, DRS."""
+    """Race control messages — read from DuckDB if available, else from session."""
+    year = session.event["EventDate"].year
+    round_num = int(session.event["RoundNumber"])
+    try:
+        con = duckdb.connect(str(_db_path()), read_only=True)
+        df = con.execute(
+            "SELECT * FROM race_control WHERE Year=? AND Round=? ORDER BY Lap",
+            [year, round_num]
+        ).df()
+        con.close()
+        if not df.empty:
+            return df
+    except Exception:
+        pass
+    # Fallback: live session
     msgs = session.race_control_messages.copy()
     if msgs.empty:
-        return pd.DataFrame(columns=["Time", "Lap", "Category", "Message", "Flag"])
-    msgs = msgs[["Time", "Lap", "Category", "Message", "Flag"]].copy()
+        return pd.DataFrame(columns=["Lap", "Category", "Message", "Flag"])
+    msgs = msgs[["Lap", "Category", "Message", "Flag"]].copy()
     msgs["Lap"] = msgs["Lap"].fillna(0).astype(int)
     return msgs.sort_values("Lap").reset_index(drop=True)
 
@@ -71,7 +94,22 @@ def get_safety_car_laps(session) -> set[int]:
 
 
 def get_weather(session) -> pd.DataFrame:
-    """Weather data: AirTemp, TrackTemp, Humidity, Rainfall, WindSpeed."""
+    """Weather data — read from DuckDB if available, else from session."""
+    year = session.event["EventDate"].year
+    round_num = int(session.event["RoundNumber"])
+    try:
+        con = duckdb.connect(str(_db_path()), read_only=True)
+        df = con.execute(
+            "SELECT * FROM weather_data WHERE Year=? AND Round=?",
+            [year, round_num]
+        ).df()
+        con.close()
+        if not df.empty:
+            df = df.rename(columns={"TimeMin": "Time_min"})
+            return df
+    except Exception:
+        pass
+    # Fallback: live session
     w = session.weather_data.copy()
     if w.empty:
         return w

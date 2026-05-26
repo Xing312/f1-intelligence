@@ -14,7 +14,7 @@ fastf1.Cache.enable_cache(str(CACHE_DIR))
 
 def get_session(year: int, round_num: int, session_type: str = "R"):
     session = fastf1.get_session(year, round_num, session_type)
-    session.load()
+    session.load(laps=True, telemetry=False, weather=True, messages=True)
     return session
 
 
@@ -35,19 +35,49 @@ def extract_lap_data(session) -> pd.DataFrame:
     laps = session.laps[
         ["Driver", "Team", "LapNumber", "LapTime",
          "Sector1Time", "Sector2Time", "Sector3Time",
-         "Compound", "TyreLife", "SpeedFL", "IsAccurate"]
+         "Compound", "TyreLife", "SpeedFL", "IsAccurate",
+         "PitInTime", "PitOutTime"]
     ].copy()
     laps["Year"] = session.event["EventDate"].year
     laps["Round"] = int(session.event["RoundNumber"])
     laps["EventName"] = session.event["EventName"]
     for col in ["LapTime", "Sector1Time", "Sector2Time", "Sector3Time"]:
         laps[f"{col}Sec"] = laps[col].dt.total_seconds()
-    laps = laps.drop(columns=["LapTime", "Sector1Time", "Sector2Time", "Sector3Time"])
+    laps["PitIn"] = laps["PitInTime"].notna()
+    laps["PitOut"] = laps["PitOutTime"].notna()
+    laps = laps.drop(columns=["LapTime", "Sector1Time", "Sector2Time",
+                               "Sector3Time", "PitInTime", "PitOutTime"])
     return laps
 
 
+def extract_weather(session) -> pd.DataFrame:
+    w = session.weather_data.copy()
+    if w.empty:
+        return w
+    w["TimeMin"] = w["Time"].dt.total_seconds() / 60
+    w["Year"] = session.event["EventDate"].year
+    w["Round"] = int(session.event["RoundNumber"])
+    w["EventName"] = session.event["EventName"]
+    w = w.drop(columns=["Time"])
+    return w
+
+
+def extract_race_control(session) -> pd.DataFrame:
+    msgs = session.race_control_messages.copy()
+    if msgs.empty:
+        return msgs
+    msgs["Year"] = session.event["EventDate"].year
+    msgs["Round"] = int(session.event["RoundNumber"])
+    msgs["EventName"] = session.event["EventName"]
+    msgs["Lap"] = msgs["Lap"].fillna(0).astype(int)
+    keep = ["Year", "Round", "EventName", "Lap", "Category", "Message", "Flag"]
+    msgs = msgs[[c for c in keep if c in msgs.columns]]
+    return msgs
+
+
 def _upsert(con: duckdb.DuckDBPyConnection, df: pd.DataFrame, table: str):
-    """Create table if needed, then append rows."""
+    if df.empty:
+        return
     con.execute(f"CREATE TABLE IF NOT EXISTS {table} AS SELECT * FROM df LIMIT 0")
     con.execute(f"INSERT INTO {table} SELECT * FROM df")
 
@@ -64,6 +94,9 @@ def fetch_season(year: int, db_path: Path = DB_PATH):
             session = get_session(year, int(round_num), "R")
             _upsert(con, extract_race_results(session), "race_results")
             _upsert(con, extract_lap_data(session), "lap_data")
+            _upsert(con, extract_weather(session), "weather_data")
+            _upsert(con, extract_race_control(session), "race_control")
+            print(f"  ✓ saved")
         except Exception as e:
             print(f"  Skipped — {e}")
 
