@@ -1,8 +1,12 @@
 import sys
+import importlib
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import streamlit as st
+
+import src.pipeline.db as _db
+importlib.reload(_db)
 from src.pipeline.db import available_years, get_schedule
 
 st.set_page_config(

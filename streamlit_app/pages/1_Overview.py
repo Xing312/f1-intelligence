@@ -6,13 +6,15 @@ sys.path.insert(0, str(Path(__file__).parents[2]))
 import streamlit as st
 import plotly.graph_objects as go
 import pandas as pd
-from src.pipeline.db import get_results, get_weather, get_race_control, fastest_lap
+
+import src.pipeline.db as _db
+importlib.reload(_db)
+from src.pipeline.db import get_results, get_weather, get_race_control, fastest_lap, get_telemetry
 
 
 @st.cache_data(show_spinner=False)
 def _load_fastest_telemetry(yr: int, rnd: int) -> pd.DataFrame:
-    from src.pipeline.db import get_telemetry
-    return get_telemetry(yr, rnd)  # overall fastest lap, from DuckDB
+    return get_telemetry(yr, rnd)
 
 st.set_page_config(page_title="Overview", page_icon="🏁", layout="wide")
 st.title("🏁 Race Overview")

@@ -6,7 +6,10 @@ sys.path.insert(0, str(Path(__file__).parents[2]))
 import streamlit as st
 import plotly.graph_objects as go
 import plotly.express as px
-from src.pipeline.db import get_drivers, get_sc_laps
+
+import src.pipeline.db as _db
+importlib.reload(_db)
+from src.pipeline.db import get_drivers, get_sc_laps, get_telemetry
 
 import src.analysis.lap_analysis as _la
 importlib.reload(_la)
@@ -18,7 +21,6 @@ from src.analysis.lap_analysis import (
 
 @st.cache_data(show_spinner=False)
 def _load_driver_telemetry(yr: int, rnd: int, drv_a: str, drv_b: str):
-    from src.pipeline.db import get_telemetry
     return get_telemetry(yr, rnd, drv_a), get_telemetry(yr, rnd, drv_b)
 
 st.set_page_config(page_title="Driver Duel", page_icon="⚔️", layout="wide")

@@ -8,13 +8,16 @@ import pandas as pd
 import streamlit as st
 import plotly.graph_objects as go
 
+import src.pipeline.db as _db
+importlib.reload(_db)
+from src.pipeline.db import get_results
+
 import src.analysis.tire_analysis as _ta
 importlib.reload(_ta)
 from src.analysis.tire_analysis import (
     COMPOUND_COLORS, get_stints, get_all_degradation,
     compound_comparison, pit_window_estimate,
 )
-from src.pipeline.db import get_results
 
 st.set_page_config(page_title="Tire Strategy", page_icon="🔄", layout="wide")
 st.title("🔄 Tire Strategy")

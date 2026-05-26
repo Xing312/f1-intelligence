@@ -3,9 +3,16 @@ import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parents[2]))
 
+import importlib
 import streamlit as st
 from dotenv import load_dotenv
+
+import src.pipeline.db as _db
+importlib.reload(_db)
 from src.pipeline.db import get_drivers
+
+import src.ai.race_engineer as _re
+importlib.reload(_re)
 from src.ai.race_engineer import build_race_context, ask_race_engineer
 
 load_dotenv()
