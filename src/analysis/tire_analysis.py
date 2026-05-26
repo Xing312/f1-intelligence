@@ -1,52 +1,56 @@
-"""Tire strategy: stint extraction, degradation regression, compound comparison."""
+"""Tire strategy analysis reading from DuckDB."""
 
 import numpy as np
 import pandas as pd
 from scipy import stats
-from src.pipeline.session_loader import COMPOUND_COLORS, get_safety_car_laps
+from src.pipeline.db import get_laps, get_sc_laps
+
+COMPOUND_COLORS = {
+    "SOFT": "#E8002D",
+    "MEDIUM": "#FFF200",
+    "HARD": "#FFFFFF",
+    "INTERMEDIATE": "#39B54A",
+    "WET": "#0067FF",
+    "UNKNOWN": "#999999",
+}
 
 
-def get_stints(session) -> pd.DataFrame:
-    """Extract stint data for all drivers."""
-    laps = session.laps.copy()
-    laps["LapTimeSec"] = laps["LapTime"].dt.total_seconds()
-    sc_laps = get_safety_car_laps(session)
+def get_stints(year: int, round_num: int) -> pd.DataFrame:
+    laps = get_laps(year, round_num)
+    sc_laps = get_sc_laps(year, round_num)
+    laps["IsSC"] = laps["LapNumber"].isin(sc_laps)
+    laps["Compound"] = laps["Compound"].fillna("UNKNOWN").str.upper()
 
     rows = []
     for driver in laps["Driver"].unique():
-        d_laps = laps[laps["Driver"] == driver].sort_values("LapNumber")
+        d = laps[laps["Driver"] == driver].sort_values("LapNumber")
         stint = 1
-        prev_compound = None
-        for _, lap in d_laps.iterrows():
-            compound = lap.get("Compound", "UNKNOWN") or "UNKNOWN"
-            if compound != prev_compound and prev_compound is not None:
+        prev = None
+        for _, row in d.iterrows():
+            c = row["Compound"]
+            if c != prev and prev is not None:
                 stint += 1
             rows.append({
                 "Driver": driver,
                 "Stint": stint,
-                "LapNumber": int(lap["LapNumber"]),
-                "LapTimeSec": lap["LapTimeSec"],
-                "Compound": compound.upper(),
-                "TyreLife": lap.get("TyreLife", np.nan),
-                "IsPit": pd.notna(lap.get("PitInTime")),
-                "IsPitOut": pd.notna(lap.get("PitOutTime")),
-                "IsAccurate": bool(lap.get("IsAccurate", False)),
-                "IsSC": int(lap["LapNumber"]) in sc_laps,
+                "LapNumber": int(row["LapNumber"]),
+                "LapTimeSec": row["LapTimeSec"],
+                "Compound": c,
+                "TyreLife": row["TyreLife"],
+                "PitIn": bool(row["PitIn"]),
+                "PitOut": bool(row["PitOut"]),
+                "IsAccurate": bool(row["IsAccurate"]),
+                "IsSC": bool(row["IsSC"]),
             })
-            prev_compound = compound
-
+            prev = c
     return pd.DataFrame(rows)
 
 
 def degradation_slope(stint_df: pd.DataFrame) -> dict:
-    """
-    Linear regression of lap time vs tyre life for a single stint.
-    Returns slope (s/lap), intercept, r², and filtered DataFrame.
-    """
     clean = stint_df[
         stint_df["IsAccurate"]
-        & ~stint_df["IsPit"]
-        & ~stint_df["IsPitOut"]
+        & ~stint_df["PitIn"]
+        & ~stint_df["PitOut"]
         & ~stint_df["IsSC"]
         & stint_df["LapTimeSec"].notna()
         & stint_df["TyreLife"].notna()
@@ -66,9 +70,8 @@ def degradation_slope(stint_df: pd.DataFrame) -> dict:
     }
 
 
-def get_all_degradation(session) -> list[dict]:
-    """Return degradation analysis for every driver/stint combination."""
-    stints = get_stints(session)
+def get_all_degradation(year: int, round_num: int) -> list[dict]:
+    stints = get_stints(year, round_num)
     results = []
     for driver in stints["Driver"].unique():
         d = stints[stints["Driver"] == driver]
@@ -92,13 +95,12 @@ def get_all_degradation(session) -> list[dict]:
     return results
 
 
-def compound_comparison(session) -> pd.DataFrame:
-    """Average clean lap pace per compound this race."""
-    stints = get_stints(session)
+def compound_comparison(year: int, round_num: int) -> pd.DataFrame:
+    stints = get_stints(year, round_num)
     clean = stints[
         stints["IsAccurate"]
-        & ~stints["IsPit"]
-        & ~stints["IsPitOut"]
+        & ~stints["PitIn"]
+        & ~stints["PitOut"]
         & ~stints["IsSC"]
         & stints["LapTimeSec"].notna()
     ]
@@ -112,12 +114,7 @@ def compound_comparison(session) -> pd.DataFrame:
     return summary
 
 
-def pit_window_estimate(slope: float, current_lap_time: float, threshold: float = 0.5) -> int:
-    """
-    Estimate laps remaining before degradation causes > threshold seconds of loss.
-    Returns number of additional laps, or -1 if slope is flat/negative.
-    """
+def pit_window_estimate(slope: float, threshold: float = 0.5) -> int:
     if slope is None or slope <= 0:
         return -1
-    laps_to_threshold = threshold / slope
-    return max(0, int(laps_to_threshold))
+    return max(0, int(threshold / slope))

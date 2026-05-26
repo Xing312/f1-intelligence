@@ -1,11 +1,9 @@
-import os
 import sys
 from pathlib import Path
-
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import streamlit as st
-import fastf1
+from src.pipeline.db import available_years, get_schedule
 
 st.set_page_config(
     page_title="F1 Race Intelligence Hub",
@@ -16,22 +14,32 @@ st.set_page_config(
 
 st.title("🏎️ F1 Race Intelligence Hub")
 st.markdown(
-    "Real-time F1 race analytics — lap telemetry, tire strategy, anomaly detection, and AI race engineering."
+    "F1 race analytics — lap data, tire strategy, anomaly detection, and AI race engineering."
 )
 
 # ── Sidebar: Global Session Selector ──────────────────────────────────────────
 with st.sidebar:
     st.header("Session")
-    year = st.selectbox("Season", [2024, 2023, 2022], key="year")
+
+    years = available_years()
+    if not years:
+        st.error("No data found in database. Run fetch_data.py first.")
+        st.stop()
+
+    year = st.selectbox("Season", years, key="year")
 
     @st.cache_data(show_spinner=False)
-    def get_schedule(yr):
-        schedule = fastf1.get_event_schedule(yr, include_testing=False)
-        return schedule[["RoundNumber", "EventName", "Location", "Country"]].copy()
+    def _schedule(yr):
+        return get_schedule(yr)
 
-    schedule = get_schedule(year)
+    schedule = _schedule(year)
+
+    if schedule.empty:
+        st.error(f"No races found for {year}.")
+        st.stop()
+
     round_options = {
-        f"R{int(row.RoundNumber):02d} · {row.EventName}": int(row.RoundNumber)
+        f"R{int(row.Round):02d} · {row.EventName}": int(row.Round)
         for _, row in schedule.iterrows()
     }
     round_label = st.selectbox("Race", list(round_options.keys()), key="round_label")
@@ -42,27 +50,28 @@ with st.sidebar:
 
     st.session_state["round_num"] = round_num
     st.session_state["session_code"] = session_code
-    st.session_state["event_name"] = schedule[schedule["RoundNumber"] == round_num]["EventName"].iloc[0]
+    event_row = schedule[schedule["Round"] == round_num]
+    st.session_state["event_name"] = event_row["EventName"].iloc[0] if not event_row.empty else ""
 
     st.divider()
     st.caption("Navigate using the pages above ↑")
 
 # ── Landing content ────────────────────────────────────────────────────────────
 event_name = st.session_state.get("event_name", "")
-row = schedule[schedule["RoundNumber"] == round_num].iloc[0]
+row = schedule[schedule["Round"] == round_num].iloc[0]
 
 col1, col2, col3 = st.columns(3)
 col1.metric("Event", event_name)
-col2.metric("Circuit", row["Location"])
+col2.metric("Circuit", row["Circuit"])
 col3.metric("Session", session_type)
 
 st.divider()
 st.markdown("""
 | Page | What you'll find |
 |---|---|
-| **Overview** | Race results, key stats, weather timeline, track speed map |
-| **Driver Duel** | Lap-by-lap comparison, sector delta heatmap, telemetry overlay, track delta map |
+| **Overview** | Race results, key stats, weather timeline, race control events |
+| **Driver Duel** | Lap-by-lap comparison, sector delta heatmap, consistency scores |
 | **Tire Strategy** | Stint timeline, degradation regression, compound pace comparison |
 | **Anomaly Detection** | Lap flagging by z-score and race control events |
-| **AI Race Engineer** | Ask questions about this race — answers grounded in telemetry data |
+| **AI Race Engineer** | Ask questions about this race — answers grounded in race data |
 """)

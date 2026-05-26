@@ -1,10 +1,9 @@
-"""AI Race Engineer: Groq-powered chat grounded in structured race data."""
+"""AI Race Engineer: Groq-powered chat grounded in DuckDB race data."""
 
-import os
 from groq import Groq
+from src.pipeline.db import get_results, get_weather, get_race_control, get_schedule
 from src.analysis.lap_analysis import get_lap_comparison, get_consistency_score
 from src.analysis.tire_analysis import get_stints
-from src.pipeline.session_loader import get_race_control, get_weather
 
 SYSTEM_PROMPT = """You are an expert F1 race engineer and data analyst. You are given structured data from a specific race and must answer questions about it accurately and concisely.
 
@@ -17,39 +16,49 @@ Rules:
 """
 
 
-def build_race_context(session, driver_a: str = None, driver_b: str = None) -> str:
-    """Build structured context string from race data for the AI prompt."""
-    event = session.event
+def build_race_context(year: int, round_num: int, driver_a: str = None, driver_b: str = None) -> str:
+    schedule = get_schedule(year)
+    event_row = schedule[schedule["Round"] == round_num]
+    event_name = event_row["EventName"].iloc[0] if not event_row.empty else f"Round {round_num}"
+    circuit = event_row["Circuit"].iloc[0] if not event_row.empty else "—"
+    country = event_row["Country"].iloc[0] if not event_row.empty else "—"
+
     lines = [
-        f"# Race: {event['EventName']} {event['EventDate'].year}",
-        f"Circuit: {event['Location']}, {event['Country']}",
+        f"# Race: {event_name} {year}",
+        f"Circuit: {circuit}, {country}",
         "",
     ]
 
     # Race results
-    results = session.results[["Position", "Abbreviation", "FullName", "TeamName", "Points", "Status"]].copy()
-    results = results[results["Position"].notna()].sort_values("Position")
-    lines.append("## Race Results")
-    for _, r in results.head(10).iterrows():
-        lines.append(f"P{int(r['Position'])}: {r['Abbreviation']} ({r['TeamName']}) — {r['Status']}")
-    lines.append("")
-
-    # Weather summary
     try:
-        weather = get_weather(session)
+        results = get_results(year, round_num)
+        results = results[results["Position"].notna()].copy()
+        results["_pos"] = pd.to_numeric(results["Position"], errors="coerce")
+        results = results.sort_values("_pos")
+        lines.append("## Race Results")
+        for _, r in results.head(10).iterrows():
+            lines.append(f"P{int(r['_pos'])}: {r['Abbreviation']} ({r['TeamName']}) — {r['Status']}")
+        lines.append("")
+    except Exception:
+        pass
+
+    # Weather
+    try:
+        weather = get_weather(year, round_num)
         if not weather.empty:
-            avg_air = weather["AirTemp"].mean()
-            avg_track = weather["TrackTemp"].mean()
-            rain = weather["Rainfall"].any()
-            lines.append(f"## Weather")
-            lines.append(f"Air: {avg_air:.1f}°C avg | Track: {avg_track:.1f}°C avg | Rain: {'Yes' if rain else 'No'}")
+            lines.append("## Weather")
+            lines.append(
+                f"Air: {weather['AirTemp'].mean():.1f}°C avg | "
+                f"Track: {weather['TrackTemp'].mean():.1f}°C avg | "
+                f"Rain: {'Yes' if weather['Rainfall'].any() else 'No'}"
+            )
             lines.append("")
     except Exception:
         pass
 
-    # Race control events
+    # Race control
     try:
-        rc = get_race_control(session)
+        rc = get_race_control(year, round_num)
         sc_events = rc[rc["Message"].str.contains("SAFETY CAR|VIRTUAL|RED FLAG", na=False, case=False)]
         if not sc_events.empty:
             lines.append("## Key Race Control Events")
@@ -59,34 +68,39 @@ def build_race_context(session, driver_a: str = None, driver_b: str = None) -> s
     except Exception:
         pass
 
-    # Stints summary
+    # Pit stop summary
     try:
-        stints = get_stints(session)
+        stints = get_stints(year, round_num)
         lines.append("## Pit Stop Summary")
-        for driver in stints["Driver"].unique()[:10]:
+        for driver in list(stints["Driver"].unique())[:10]:
             d_stints = stints[stints["Driver"] == driver]
-            compounds = d_stints.drop_duplicates("Stint")[["Stint", "Compound", "StartLap" if "StartLap" in d_stints.columns else "LapNumber"]].head()
+            by_stint = d_stints.groupby("Stint").agg(
+                Compound=("Compound", "first"),
+                StartLap=("LapNumber", "min"),
+            ).reset_index()
             stint_str = " → ".join(
-                f"{row['Compound']}@L{row.get('StartLap', row.get('LapNumber','?'))}"
-                for _, row in d_stints.drop_duplicates("Stint").iterrows()
+                f"{row['Compound']}@L{row['StartLap']}" for _, row in by_stint.iterrows()
             )
             lines.append(f"{driver}: {stint_str}")
         lines.append("")
     except Exception:
         pass
 
-    # Driver comparison if provided
+    # Driver comparison
     if driver_a and driver_b:
         try:
-            lap_comp = get_lap_comparison(session, driver_a, driver_b)
+            lap_comp = get_lap_comparison(year, round_num, driver_a, driver_b)
             delta_avg = lap_comp["delta"].dropna().mean()
             faster = driver_a if delta_avg < 0 else driver_b
             lines.append(f"## {driver_a} vs {driver_b}")
             lines.append(f"Average lap delta: {abs(delta_avg):.3f}s — {faster} faster overall")
-            for driver in [driver_a, driver_b]:
-                c = get_consistency_score(session, driver)
+            for drv in [driver_a, driver_b]:
+                c = get_consistency_score(year, round_num, drv)
                 if c["std"] is not None:
-                    lines.append(f"{driver} consistency: mean {c['mean']:.3f}s, std ±{c['std']:.3f}s over {c['n_laps']} clean laps")
+                    lines.append(
+                        f"{drv} consistency: mean {c['mean']:.3f}s, "
+                        f"std ±{c['std']:.3f}s over {c['n_laps']} clean laps"
+                    )
             lines.append("")
         except Exception:
             pass
@@ -95,7 +109,6 @@ def build_race_context(session, driver_a: str = None, driver_b: str = None) -> s
 
 
 def ask_race_engineer(question: str, context: str, api_key: str):
-    """Send question to Groq with race context. Returns streamed response."""
     client = Groq(api_key=api_key)
     messages = [
         {"role": "system", "content": SYSTEM_PROMPT + "\n\n" + context},
