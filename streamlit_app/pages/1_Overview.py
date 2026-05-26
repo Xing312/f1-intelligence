@@ -9,11 +9,15 @@ import pandas as pd
 from src.pipeline.db import get_results, get_weather, get_race_control, fastest_lap
 
 
-@st.cache_resource(show_spinner="Loading telemetry from F1 API…")
-def _load_telemetry(yr: int, rnd: int):
+@st.cache_data(show_spinner="Loading telemetry from F1 API…")
+def _load_fastest_telemetry(yr: int, rnd: int) -> pd.DataFrame:
     import src.pipeline.session_loader as _sl
+    import src.analysis.track_map as _tm
     importlib.reload(_sl)
-    return _sl.load_session(yr, rnd, "R")
+    importlib.reload(_tm)
+    session = _sl.load_session(yr, rnd, "R")
+    fl = session.laps.pick_fastest()
+    return _tm.lap_to_telemetry(fl)
 
 st.set_page_config(page_title="Overview", page_icon="🏁", layout="wide")
 st.title("🏁 Race Overview")
@@ -181,14 +185,12 @@ if st.session_state.get("load_overview_map"):
         import src.analysis.track_map as _tm
         importlib.reload(_tm)
 
-        session = _load_telemetry(year, round_num)
-        fl = session.laps.pick_fastest()
-
+        tel = _load_fastest_telemetry(year, round_num)
         channel = st.radio(
             "Color channel", ["Speed", "Throttle", "nGear", "Brake"],
             horizontal=True, key="overview_channel",
         )
-        fig_map = _tm.build_track_figure(fl, channel)
+        fig_map = _tm.build_track_figure(tel, channel)
         st.plotly_chart(fig_map, use_container_width=True)
     except Exception as e:
         st.warning(f"Circuit map unavailable: {e}")

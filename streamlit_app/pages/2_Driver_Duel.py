@@ -16,11 +16,16 @@ from src.analysis.lap_analysis import (
 )
 
 
-@st.cache_resource(show_spinner="Loading telemetry from F1 API…")
-def _load_telemetry(yr: int, rnd: int):
+@st.cache_data(show_spinner="Loading telemetry from F1 API…")
+def _load_driver_telemetry(yr: int, rnd: int, drv_a: str, drv_b: str):
     import src.pipeline.session_loader as _sl
+    import src.analysis.track_map as _tm
     importlib.reload(_sl)
-    return _sl.load_session(yr, rnd, "R")
+    importlib.reload(_tm)
+    session = _sl.load_session(yr, rnd, "R")
+    fl_a = session.laps.pick_driver(drv_a).pick_fastest()
+    fl_b = session.laps.pick_driver(drv_b).pick_fastest()
+    return _tm.lap_to_telemetry(fl_a), _tm.lap_to_telemetry(fl_b)
 
 st.set_page_config(page_title="Driver Duel", page_icon="⚔️", layout="wide")
 st.title("⚔️ Driver Duel")
@@ -142,12 +147,7 @@ if st.session_state.get("load_duel_telemetry"):
         importlib.reload(_tm)
         from plotly.subplots import make_subplots
 
-        session = _load_telemetry(year, round_num)
-        fl_a = session.laps.pick_driver(driver_a).pick_fastest()
-        fl_b = session.laps.pick_driver(driver_b).pick_fastest()
-
-        tel_a = fl_a.get_telemetry().add_distance()
-        tel_b = fl_b.get_telemetry().add_distance()
+        tel_a, tel_b = _load_driver_telemetry(year, round_num, driver_a, driver_b)
 
         channels = ["Speed", "Throttle", "Brake"]
         fig_tel = make_subplots(rows=3, cols=1, shared_xaxes=True,
@@ -174,7 +174,7 @@ if st.session_state.get("load_duel_telemetry"):
         st.plotly_chart(fig_tel, use_container_width=True)
 
         st.subheader("Track Delta Map")
-        fig_delta = _tm.build_delta_map(fl_a, fl_b, driver_a, driver_b)
+        fig_delta = _tm.build_delta_map(tel_a, tel_b, driver_a, driver_b)
         st.plotly_chart(fig_delta, use_container_width=True)
 
     except Exception as e:
