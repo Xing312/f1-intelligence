@@ -1,4 +1,5 @@
 import sys
+import importlib
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parents[2]))
 
@@ -6,6 +7,9 @@ import streamlit as st
 import plotly.graph_objects as go
 import plotly.express as px
 from src.pipeline.db import get_drivers, get_sc_laps
+
+import src.analysis.lap_analysis as _la
+importlib.reload(_la)
 from src.analysis.lap_analysis import (
     get_lap_comparison, get_sector_delta_pivot,
     get_consistency_score, auto_summary,

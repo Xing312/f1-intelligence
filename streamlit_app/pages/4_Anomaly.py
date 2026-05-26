@@ -1,4 +1,5 @@
 import sys
+import importlib
 import pandas as pd
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parents[2]))
@@ -6,6 +7,9 @@ sys.path.insert(0, str(Path(__file__).parents[2]))
 import streamlit as st
 import plotly.graph_objects as go
 from src.pipeline.db import get_drivers, get_race_control
+
+import src.analysis.anomaly as _an
+importlib.reload(_an)
 from src.analysis.anomaly import flag_laps, get_anomaly_summary, FLAG_COLORS, FLAG_LABELS
 
 st.set_page_config(page_title="Anomaly Detection", page_icon="🔍", layout="wide")
