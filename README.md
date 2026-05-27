@@ -15,6 +15,30 @@ An interactive F1 race analytics platform built with real telemetry data. Select
 | **Season Dashboard** | Points progression, finishing position heatmap, championship standings snapshot |
 | **AI Race Engineer** | Chat interface grounded in structured telemetry and race data |
 
+## Screenshots
+
+**Race Overview** — race results with podium highlights, key stats, and a circuit speed map coloured by Speed / Throttle / Gear / Brake.
+
+![Race Overview](docs/screenshots/overview_results.png)
+![Circuit Map](docs/screenshots/overview_circuit_map.png)
+
+**Driver Duel** — head-to-head lap time comparison and a full telemetry overlay (Speed, Throttle, Brake) across the circuit distance.
+
+![Lap Time Comparison](docs/screenshots/driver_duel_lap_comparison.png)
+![Telemetry & Track Delta](docs/screenshots/driver_duel_telemetry.png)
+
+**Tire Strategy** — per-stint degradation regression with pit window estimates.
+
+![Tire Degradation](docs/screenshots/tire_strategy_degradation.png)
+
+**Season Dashboard** — cumulative points progression across all rounds, toggling between Driver and Constructor championship.
+
+![Season Dashboard](docs/screenshots/season_dashboard_points.png)
+
+**AI Race Engineer** — context-grounded chat powered by Groq Llama 3.3 70B, with suggested starter questions.
+
+![AI Race Engineer](docs/screenshots/ai_race_engineer.png)
+
 ## Tech Stack
 
 | Layer | Tools |
