@@ -115,13 +115,7 @@ if session_code == "Q":
     fig_bar.update_layout(
         barmode="group", yaxis_title="Time (s)",
         paper_bgcolor="#0F0F0F", plot_bgcolor="#0F0F0F", font_color="#FFF",
-        height=320, margin=dict(t=10),
-        yaxis=dict(range=[
-            min([r[driver_a] for r in rows if r[driver_a] != "—"] or [0],
-                key=lambda x: float("inf") if x == "—" else 1) * 0.998
-            if any(r[driver_a] != "—" for r in rows) else 0,
-            None
-        ]),
+        height=320, margin=dict(t=40),
     )
     st.plotly_chart(fig_bar, use_container_width=True)
 
