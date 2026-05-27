@@ -98,6 +98,39 @@ def get_drivers(year: int, round_num: int) -> list[str]:
     return df["Driver"].tolist()
 
 
+def get_season_results(year: int) -> pd.DataFrame:
+    """All race results for a season, ordered by round."""
+    return _q(
+        "SELECT DISTINCT * FROM race_results WHERE Year=? ORDER BY CAST(Round AS INT), CAST(Position AS FLOAT)",
+        [year]
+    )
+
+
+def get_qualifying_results(year: int, round_num: int) -> pd.DataFrame:
+    try:
+        return _q(
+            "SELECT DISTINCT * FROM qualifying_results WHERE Year=? AND Round=? ORDER BY CAST(Position AS FLOAT)",
+            [year, round_num]
+        )
+    except Exception:
+        return pd.DataFrame()
+
+
+def get_qualifying_laps(year: int, round_num: int, driver: str = None) -> pd.DataFrame:
+    try:
+        if driver:
+            return _q(
+                "SELECT * FROM qualifying_laps WHERE Year=? AND Round=? AND Driver=? ORDER BY LapNumber",
+                [year, round_num, driver]
+            )
+        return _q(
+            "SELECT * FROM qualifying_laps WHERE Year=? AND Round=? ORDER BY Driver, LapNumber",
+            [year, round_num]
+        )
+    except Exception:
+        return pd.DataFrame()
+
+
 def fastest_lap(year: int, round_num: int, driver: str = None) -> pd.Series:
     laps = get_laps(year, round_num, driver)
     clean = laps[laps["IsAccurate"] & laps["LapTimeSec"].notna() & ~laps["PitIn"] & ~laps["PitOut"]]
