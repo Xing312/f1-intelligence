@@ -172,7 +172,12 @@ The Season Dashboard provides a full-season view using only the existing `race_r
 
 ## AI Race Engineer
 
-The AI Race Engineer is a context-grounded chat interface powered by **Groq** (Llama 3.3 70B). It does not rely on the model's training knowledge about races — instead, every question is answered against a structured context block assembled from the current race's DuckDB data.
+The AI Race Engineer is a chat interface powered by **Groq** (Llama 3.3 70B) that combines two knowledge sources to answer a wide range of F1 questions:
+
+- **Race Data** — a structured context block assembled from the current race's DuckDB data (results, stints, weather, safety car events). Answers grounded here cite specific lap numbers and time deltas.
+- **General F1 Knowledge** — driver profiles, team histories, championship records, rules, and circuit background from the model's training. Answers from this source are prefixed with *"As general F1 background:"* so users always know which source is being used.
+
+This dual-source design means the engineer can answer both *"what was VER's pace delta in Stint 2?"* and *"who is VER and how many championships has he won?"* — while never fabricating race statistics.
 
 ### How the context is built
 
