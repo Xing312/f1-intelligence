@@ -9,22 +9,95 @@ import pandas as pd
 
 import src.pipeline.db as _db
 importlib.reload(_db)
-from src.pipeline.db import get_results, get_weather, get_race_control, fastest_lap, get_telemetry
+from src.pipeline.db import (
+    get_results, get_weather, get_race_control, fastest_lap, get_telemetry,
+    get_qualifying_results,
+)
 
 
 @st.cache_data(show_spinner=False)
 def _load_fastest_telemetry(yr: int, rnd: int) -> pd.DataFrame:
     return get_telemetry(yr, rnd)
 
-st.set_page_config(page_title="Overview", page_icon="🏁", layout="wide")
-st.title("🏁 Race Overview")
 
-year = st.session_state.get("year", 2024)
-round_num = st.session_state.get("round_num", 1)
+st.set_page_config(page_title="Overview", page_icon="🏁", layout="wide")
+
+year       = st.session_state.get("year", 2024)
+round_num  = st.session_state.get("round_num", 1)
 event_name = st.session_state.get("event_name", "")
+session_code = st.session_state.get("session_code", "R")
+
+st.title("🏁 Race Overview" if session_code == "R" else "🏁 Qualifying Overview")
 st.caption(f"{event_name} · {year}")
 
-# ── Race Results ───────────────────────────────────────────────────────────────
+# ══════════════════════════════════════════════════════════════════════════════
+# QUALIFYING VIEW
+# ══════════════════════════════════════════════════════════════════════════════
+if session_code == "Q":
+    st.subheader("Qualifying Classification")
+    try:
+        qr = get_qualifying_results(year, round_num)
+        if qr.empty:
+            st.info("Qualifying data not yet available for this round. Run `fetch_qualifying.py` to populate.")
+        else:
+            qr["Position"] = pd.to_numeric(qr["Position"], errors="coerce")
+            qr = qr.sort_values("Position")
+
+            def fmt_time(sec):
+                if pd.isna(sec) or sec == 0:
+                    return "—"
+                m, s = divmod(sec, 60)
+                return f"{int(m)}:{s:06.3f}" if m else f"{s:.3f}"
+
+            for col in ["Q1Sec", "Q2Sec", "Q3Sec"]:
+                if col in qr.columns:
+                    qr[col.replace("Sec", "")] = qr[col].apply(fmt_time)
+
+            display_cols = [c for c in ["Position", "Abbreviation", "FullName", "TeamName", "Q1", "Q2", "Q3"]
+                            if c in qr.columns]
+            st.dataframe(qr[display_cols], use_container_width=True, hide_index=True)
+
+            # Key stats
+            st.subheader("Key Stats")
+            c1, c2, c3 = st.columns(3)
+            pole = qr[qr["Position"] == 1].iloc[0] if not qr[qr["Position"] == 1].empty else None
+            if pole is not None:
+                c1.metric("Pole Position", pole["Abbreviation"])
+                q3_sec = qr["Q3Sec"] if "Q3Sec" in qr.columns else None
+                if q3_sec is not None:
+                    valid = q3_sec.dropna()
+                    if len(valid) >= 2:
+                        gap = valid.iloc[1] - valid.iloc[0]
+                        c2.metric("P1–P2 Gap", f"{gap:.3f}s")
+            if "TeamName" in qr.columns:
+                top_team = qr[qr["Position"] == 1]["TeamName"].iloc[0] if not qr[qr["Position"] == 1].empty else "—"
+                c3.metric("Pole Team", top_team)
+    except Exception as e:
+        st.warning(f"Qualifying results unavailable: {e}")
+
+    st.divider()
+    # Circuit map uses race telemetry (same track)
+    st.subheader("Circuit Map")
+    try:
+        import src.analysis.track_map as _tm
+        importlib.reload(_tm)
+        tel = _load_fastest_telemetry(year, round_num)
+        if tel.empty:
+            st.info("No telemetry data stored for this round.")
+        else:
+            channel = st.radio("Color channel", ["Speed", "Throttle", "nGear", "Brake"],
+                               horizontal=True, key="q_overview_channel")
+            fig_map = _tm.build_track_figure(tel, channel)
+            st.plotly_chart(fig_map, use_container_width=True)
+            st.caption("Race fastest lap telemetry · colored by selected channel")
+    except Exception as e:
+        st.warning(f"Circuit map unavailable: {e}")
+
+    st.stop()
+
+# ══════════════════════════════════════════════════════════════════════════════
+# RACE VIEW
+# ══════════════════════════════════════════════════════════════════════════════
 st.subheader("Results")
 try:
     results = get_results(year, round_num)
@@ -143,26 +216,18 @@ with col_right:
                 if pd.notna(row.get("Flag")) and str(row["Flag"]) not in ("None", "", "nan"):
                     return row["Flag"]
                 msg = str(row["Message"]).upper()
-                if "DRS ENABLED" in msg:
-                    return "DRSON"
-                if "DRS DISABLED" in msg:
-                    return "DRSOFF"
-                if "SAFETY CAR" in msg:
-                    return "SAFETY CAR"
-                if "VIRTUAL" in msg:
-                    return "VSC"
-                if "RED FLAG" in msg:
-                    return "RED"
-                if "YELLOW" in msg:
-                    return "YELLOW"
+                if "DRS ENABLED" in msg:   return "DRSON"
+                if "DRS DISABLED" in msg:  return "DRSOFF"
+                if "SAFETY CAR" in msg:    return "SAFETY CAR"
+                if "VIRTUAL" in msg:       return "VSC"
+                if "RED FLAG" in msg:      return "RED"
+                if "YELLOW" in msg:        return "YELLOW"
                 return "—"
 
             notable["Flag"] = notable.apply(infer_flag, axis=1)
             if not notable.empty:
-                st.dataframe(
-                    notable[["Lap", "Flag", "Message"]],
-                    use_container_width=True, hide_index=True,
-                )
+                st.dataframe(notable[["Lap", "Flag", "Message"]],
+                             use_container_width=True, hide_index=True)
             else:
                 st.info("No notable race control events.")
     except Exception as e:
@@ -170,7 +235,7 @@ with col_right:
 
 st.divider()
 
-# ── Circuit Map (telemetry — on demand) ───────────────────────────────────────
+# ── Circuit Map ────────────────────────────────────────────────────────────────
 st.subheader("Circuit Map")
 try:
     import src.analysis.track_map as _tm
@@ -179,10 +244,8 @@ try:
     if tel.empty:
         st.info("No telemetry data stored for this race.")
     else:
-        channel = st.radio(
-            "Color channel", ["Speed", "Throttle", "nGear", "Brake"],
-            horizontal=True, key="overview_channel",
-        )
+        channel = st.radio("Color channel", ["Speed", "Throttle", "nGear", "Brake"],
+                           horizontal=True, key="overview_channel")
         fig_map = _tm.build_track_figure(tel, channel)
         st.plotly_chart(fig_map, use_container_width=True)
         st.caption("Fastest lap of the race · colored by selected channel")
