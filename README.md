@@ -110,6 +110,59 @@ python src/pipeline/fetch_data.py 2021 2022 2023 2024 2025
 python src/pipeline/fetch_telemetry.py 2021 2022 2023 2024 2025
 ```
 
+## AI Race Engineer
+
+The AI Race Engineer is a context-grounded chat interface powered by **Groq** (Llama 3.3 70B). It does not rely on the model's training knowledge about races — instead, every question is answered against a structured context block assembled from the current race's DuckDB data.
+
+### How the context is built
+
+Each time you open the page, `build_race_context()` queries DuckDB and assembles a Markdown document injected as the system prompt:
+
+```
+# Race: Bahrain Grand Prix 2024
+Circuit: Sakhir, Bahrain
+
+## Race Results
+P1: VER (Red Bull Racing) — Finished
+P2: SAI (Ferrari) — Finished
+...
+
+## Weather
+Air: 29.4°C avg | Track: 38.7°C avg | Rain: No
+
+## Key Race Control Events
+Lap 18: SAFETY CAR DEPLOYED
+Lap 21: SAFETY CAR WITHDRAWN
+
+## Pit Stop Summary
+VER: SOFT@L1 → MEDIUM@L20 → HARD@L38
+SAI: SOFT@L1 → HARD@L22
+...
+
+## VER vs NOR  (if two drivers selected)
+Average lap delta: 0.312s — VER faster overall
+VER consistency: mean 91.847s, std ±0.241s over 48 clean laps
+```
+
+### Model and inference settings
+
+| Setting | Value |
+|---|---|
+| Model | `llama-3.3-70b-versatile` |
+| Temperature | 0.3 (factual, low creativity) |
+| Max tokens | 512 |
+| Streaming | Yes — token-by-token via Groq streaming API |
+
+### What it can answer well
+
+- Pace comparisons and lap delta analysis between any two drivers
+- Tire strategy decisions (undercut windows, stint lengths, compound choices)
+- Impact of safety car or red flag periods on race outcomes
+- Consistency and degradation trends across stints
+- Position changes relative to grid start
+
+The system prompt instructs the model to cite specific lap numbers and time deltas, use F1 terminology, and explicitly say when the provided data is insufficient to answer.
+
 ## Disclaimer
 
 This project is unofficial and is not associated with Formula 1, Formula One Management (FOM), the FIA, or any F1 team. All F1-related data is sourced via [FastF1](https://github.com/theOehrly/Fast-F1), which accesses publicly available timing data. This project is intended for personal and educational use only and must not be used for commercial purposes.
