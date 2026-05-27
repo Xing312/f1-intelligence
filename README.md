@@ -8,10 +8,11 @@ An interactive F1 race analytics platform built with real telemetry data. Select
 
 | Page | What it shows |
 |---|---|
-| **Overview** | Race results, key metrics, weather timeline, track speed map |
-| **Driver Duel** | Lap comparison, sector delta heatmap, telemetry overlay, track delta map |
+| **Overview** | Race results, key metrics, weather timeline, track speed map — or qualifying classification when Qualifying is selected |
+| **Driver Duel** | Lap comparison, sector delta heatmap, telemetry overlay, track delta map — or Q1/Q2/Q3 session times and all qualifying laps |
 | **Tire Strategy** | Full-field stint timeline, degradation regression, compound pace comparison |
 | **Anomaly Detection** | Lap flagging by z-score, pit stops, safety car laps, and race control events |
+| **Season Dashboard** | Points progression, finishing position heatmap, championship standings snapshot |
 | **AI Race Engineer** | Chat interface grounded in structured telemetry and race data |
 
 ## Tech Stack
@@ -59,14 +60,15 @@ An interactive F1 race analytics platform built with real telemetry data. Select
 │  2_Driver_Duel.py — lap compare, sector heatmap, delta map      │
 │  3_Tire_Strategy.py — Gantt timeline, regression, pit window    │
 │  4_Anomaly.py     — flagged lap scatter, event timeline         │
-│  5_AI_Engineer.py — streaming chat grounded in race context     │
+│  5_Season.py      — points progression, heatmap, standings      │
+│  6_AI_Engineer.py — streaming chat grounded in race context     │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
 **Key design decisions:**
 
 - **Pre-computed telemetry** — fastest-lap X/Y/Speed/Throttle for every driver is stored in DuckDB at ingest time, so circuit maps and driver telemetry overlays load instantly with no API calls at runtime.
-- **DuckDB as the single source of truth** — all five pages read exclusively from `f1.duckdb`. No FastF1 imports at page load; no live API calls during user interaction.
+- **DuckDB as the single source of truth** — all six pages read exclusively from `f1.duckdb`. No FastF1 imports at page load; no live API calls during user interaction.
 - **Stateless pages** — `st.session_state` carries only the selected year/round/session. Every page is independently re-runnable; `importlib.reload()` is applied to all `src.*` modules so Streamlit Cloud never serves stale cached module bytecode.
 - **Groq for AI** — Llama 3.3 70B via the Groq free-tier API. The race engineer builds a structured context string from DuckDB (results, stints, anomalies, weather) and injects it as the system prompt, keeping the LLM grounded in actual race data.
 
@@ -103,12 +105,38 @@ F1/
 
 ## Data
 
-Sessions are fetched via FastF1 and persisted to DuckDB. Currently includes 2021–2025 full seasons (race results, lap times, weather, race control events, and fastest-lap telemetry for all drivers). Run the fetch scripts to add or update years:
+Sessions are fetched via FastF1 and persisted to DuckDB. Currently includes 2021–2025 full seasons. Run the fetch scripts to add or update years:
 
 ```bash
+# Race data: results, lap times, weather, race control events
 python src/pipeline/fetch_data.py 2021 2022 2023 2024 2025
+
+# Fastest-lap telemetry per driver (X/Y/Speed/Throttle/Gear/Brake)
 python src/pipeline/fetch_telemetry.py 2021 2022 2023 2024 2025
+
+# Qualifying session results and laps (Q1/Q2/Q3)
+python src/pipeline/fetch_qualifying.py 2021 2022 2023 2024 2025
 ```
+
+| Table | Contents |
+|---|---|
+| `race_results` | Finishing position, points, status per driver per race |
+| `lap_data` | Per-lap sector times, compound, tyre life, pit flags |
+| `weather_data` | Air/track temp and rainfall sampled throughout each race |
+| `race_control` | Safety car, VSC, red flag, and DRS events with lap number |
+| `telemetry` | ~1.5 M rows — X/Y/Speed/Throttle/Gear/Brake for every driver's fastest lap |
+| `qualifying_results` | Q1/Q2/Q3 best times and grid position per driver |
+| `qualifying_laps` | All individual qualifying laps with sector times |
+
+## Season Dashboard
+
+The Season Dashboard provides a full-season view using only the existing `race_results` table — no additional data required.
+
+**Points Progression** — cumulative points per round as a line chart, toggling between Driver and Constructor championship. The top-N slider (5–20) keeps the chart readable across different screen sizes.
+
+**Race Results Heatmap** — a grid of all drivers × all rounds, colored by finishing position (green = P1, red = P20). Drivers are ordered by total season points. Grey cells indicate DNF/DNS or missing data.
+
+**Championship Standings Snapshot** — a round slider lets you freeze standings at any point in the season and compare the driver/constructor tables side-by-side, showing what the championship looked like at that exact moment.
 
 ## AI Race Engineer
 
