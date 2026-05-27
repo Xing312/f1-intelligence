@@ -22,18 +22,26 @@ An interactive F1 race analytics platform built with real telemetry data. Select
 ![Race Overview](docs/screenshots/overview_results.png)
 ![Circuit Map](docs/screenshots/overview_circuit_map.png)
 
-**Driver Duel** — head-to-head lap time comparison and a full telemetry overlay (Speed, Throttle, Brake) across the circuit distance.
+**Driver Duel** — head-to-head lap time comparison, per-sector delta heatmap, and a full telemetry overlay (Speed, Throttle, Brake) across the circuit distance.
 
 ![Lap Time Comparison](docs/screenshots/driver_duel_lap_comparison.png)
+![Sector Delta Heatmap](docs/screenshots/driver_duel_sector_delta.png)
 ![Telemetry & Track Delta](docs/screenshots/driver_duel_telemetry.png)
 
-**Tire Strategy** — per-stint degradation regression with pit window estimates.
+**Tire Strategy** — full-field stint Gantt timeline showing every driver's compound choices, followed by per-stint degradation regression with pit window estimates.
 
+![Stint Timeline](docs/screenshots/tire_strategy_gantt.png)
 ![Tire Degradation](docs/screenshots/tire_strategy_degradation.png)
 
-**Season Dashboard** — cumulative points progression across all rounds, toggling between Driver and Constructor championship.
+**Anomaly Detection** — z-score flagged lap timeline (pit stops, safety car laps, anomalies colour-coded) and a race control event log.
 
-![Season Dashboard](docs/screenshots/season_dashboard_points.png)
+![Lap Timeline](docs/screenshots/anomaly_lap_timeline.png)
+![Race Control Events](docs/screenshots/anomaly_race_control.png)
+
+**Season Dashboard** — cumulative points progression across all rounds, and a full-season finishing position heatmap (green = P1, red = P20) across all drivers and rounds.
+
+![Points Progression](docs/screenshots/season_dashboard_points.png)
+![Race Results Heatmap](docs/screenshots/season_dashboard_heatmap.png)
 
 **AI Race Engineer** — context-grounded chat powered by Groq Llama 3.3 70B, with suggested starter questions.
 
